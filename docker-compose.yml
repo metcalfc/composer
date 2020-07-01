@@ -1,0 +1,10 @@
+version: "3.8"
+services:
+  frontend:
+    image: metcalfc/myexample:v0.1.0
+    ports:
+      - "5000:5000"
+    depends_on:
+      - backend
+  backend:
+    image: redis:alpine
