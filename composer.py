@@ -132,22 +132,20 @@ def check_image(client, dict):
 
         ref = dict["image"].split(":")[0] + "@" + image["Descriptor"]["digest"]
 
-        print("Updated: ", dict["image"], " -> ", ref)
+        click.echo("Updated: " + dict["image"] + " -> " + ref)
         dict["image"] = ref
 
 
-def compile_compose_file(compose_file, outfile):
+def compile_compose_file(infile, outfile):
     client = docker.from_env()
 
-    with open(compose_file) as file:
-        compose = yaml.full_load(file)
+    compose = yaml.full_load(infile)
 
-        for item, doc in compose["services"].items():
-            check_image(client, compose["services"][item])
+    for item, doc in compose["services"].items():
+        check_image(client, compose["services"][item])
 
-    if outfile != "":
-        with open(outfile, "w") as file:
-            yaml.dump(compose, file)
+    if outfile is not None:
+        yaml.dump(compose, outfile)
 
     return yaml.dump(compose)
 
@@ -161,8 +159,9 @@ def cli():
 
 
 @cli.command()
-@click.option("--file", default="./docker-compose.yml", help="Compose File")
-@click.option("--outfile", default="", help="Dab File")
+@click.option(
+    "--file", default="./docker-compose.yml", type=click.File("r"), help="Compose File"
+)
 @click.option(
     "--name", default=os.path.basename(os.getcwd()), help="Compose Project Name"
 )
@@ -175,7 +174,7 @@ def share(file, outfile, name):
         do_gh_login()
 
     # Convert references to sha's
-    files = {"docker-compose.yml": {"content": compile_compose_file(file, outfile)}}
+    files = {"docker-compose.yml": {"content": compile_compose_file(file, None)}}
 
     # run through the user's gists looking for a matching description or return None
     gist = next(
@@ -194,8 +193,13 @@ def run():
 
 
 @cli.command()
-def compose():
+@click.option(
+    "--file", default="./docker-compose.yml", type=click.File("r"), help="Compose File"
+)
+@click.option("--out", default="-", type=click.File("w"), help="Dab File")
+def compile(file, out):
     """ Output a dab'ified compose file """
+    compile_compose_file(file, out)
 
 
 @cli.command()
