@@ -18,7 +18,6 @@ from requests_oauthlib import OAuth2Session
 app = Flask(__name__)
 
 
-# This information is obtained upon registration of a new GitHub
 client_id = "51187c529dd6739844cc"
 client_secret = "8ba64c6a81d7dc707a604077c5910c357951205c"
 authorization_base_url = "https://github.com/login/oauth/authorize"
@@ -71,6 +70,13 @@ def callback():
     return redirect(url_for(".profile"))
 
 
+def shutdown_server():
+    func = request.environ.get("werkzeug.server.shutdown")
+    if func is None:
+        raise RuntimeError("Not running with the Werkzeug Server")
+    func()
+
+
 @app.route("/profile", methods=["GET"])
 def profile():
     """Fetching a protected resource using an OAuth 2 token.
@@ -85,28 +91,15 @@ def profile():
     with open(CRED_FILE, "w") as fd:
         yaml.dump(data, fd)
 
-    return redirect(url_for(".shutdown"))
-
-
-def shutdown_server():
-    func = request.environ.get("werkzeug.server.shutdown")
-    if func is None:
-        raise RuntimeError("Not running with the Werkzeug Server")
-    func()
-
-
-@app.route("/shutdown", methods=["GET"])
-def shutdown():
     shutdown_server()
     return "GitHub Credentials Stored. Close this tab."
 
 
 def do_gh_login():
-    url = "http://localhost:5000"
     print(
-        "\n\n\n\nPlease open a browser on: "
-        + url
-        + " to setup your GitHub credentials.\n\n\n\n"
+        "\n\n\nPlease open a browser on: "
+        + "http://localhost:5000"
+        + " to setup your GitHub credentials.\n\n\n"
     )
 
     app.secret_key = os.urandom(24)
@@ -122,9 +115,7 @@ def check_gh_token(file):
     except FileNotFoundError as e:
         return None
 
-    gh = github3.login(token=data["token"])
-
-    return gh
+    return github3.login(token=data["token"])
 
 
 def check_image(client, dict):
@@ -141,7 +132,7 @@ def check_image(client, dict):
         dict["image"] = ref
 
 
-def compile_compose_file(compose_file, out_file):
+def compile_compose_file(compose_file, outfile):
     client = docker.from_env()
 
     with open(compose_file) as file:
@@ -150,8 +141,11 @@ def compile_compose_file(compose_file, out_file):
         for item, doc in compose["services"].items():
             check_image(client, compose["services"][item])
 
-    with open(out_file, "w") as file:
-        yaml.dump(compose, file)
+    if outfile != "":
+        with open(outfile, "w") as file:
+            yaml.dump(compose, file)
+
+    return yaml.dump(compose)
 
 
 if __name__ == "__main__":
@@ -169,9 +163,12 @@ if __name__ == "__main__":
         help="Compose File Input (default: %(default)s)",
     )
     parser.add_argument(
-        "--outfile",
-        default="./dab.yml",
-        help="Compose File Output (default: %(default)s)",
+        "--outfile", default="", help="Compose File Output (default: %(default)s)",
+    )
+    parser.add_argument(
+        "--name",
+        default=os.path.basename(os.getcwd()),
+        help="Compose File Input (default: %(default)s)",
     )
 
     args = parser.parse_args()
@@ -181,4 +178,18 @@ if __name__ == "__main__":
     if gh is None:
         do_gh_login()
 
-    compile_compose_file(args.file, args.outfile)
+    # Convert references to sha's
+    files = {
+        "docker-compose.yml": {"content": compile_compose_file(args.file, args.outfile)}
+    }
+
+    # run through the user's gists looking for a matching description or return None
+    gist = next(
+        (item for item in gh.gists() if item.as_dict()["description"] == args.name),
+        None,
+    )
+
+    if gist:
+        gist.edit(files=files)
+    else:
+        gh.create_gist(args.name, f, public=True)
