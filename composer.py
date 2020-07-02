@@ -2,6 +2,7 @@
 
 import argparse
 import json
+import logging
 import os
 import subprocess
 import sys
@@ -97,16 +98,15 @@ def profile():
 
 
 def do_gh_login():
-    print(
-        "\n\n\nPlease open a browser on: "
-        + "http://localhost:5000"
-        + " to setup your GitHub credentials.\n\n\n"
-    )
+    click.launch("http://localhost:5000")
 
     # This allows us to use a plain HTTP callback
     os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
 
     app.secret_key = os.urandom(24)
+    log = logging.getLogger("werkzeug")
+    log.setLevel(logging.ERROR)
+    app.logger.disabled = True
     app.run(debug=False, host="0.0.0.0")
 
 
@@ -152,18 +152,23 @@ def compile_compose_file(compose_file, outfile):
     return yaml.dump(compose)
 
 
-description = """
+@click.group()
+@click.version_option()
+def cli():
+    """
     Convert compose images references to full sha digests
-"""
+    """
 
 
-@click.command()
+@cli.command()
 @click.option("--file", default="./docker-compose.yml", help="Compose File")
 @click.option("--outfile", default="", help="Dab File")
 @click.option(
     "--name", default=os.path.basename(os.getcwd()), help="Compose Project Name"
 )
-def cli(file, outfile, name):
+def share(file, outfile, name):
+    """Create a new compose share"""
+
     gh = check_gh_token(CRED_FILE)
 
     if gh is None:
@@ -181,3 +186,25 @@ def cli(file, outfile, name):
         gist.edit(files=files)
     else:
         gh.create_gist(name, f, public=True)
+
+
+@cli.command()
+def run():
+    """ Run a shared compose project """
+
+
+@cli.command()
+def compose():
+    """ Output a dab'ified compose file """
+
+
+@cli.command()
+def login():
+    """ Login to GitHub and get an oauth2 token """
+
+    gh = check_gh_token(CRED_FILE)
+
+    if gh is None:
+        do_gh_login()
+    else:
+        click.echo("Already logged in.")
