@@ -33,6 +33,8 @@ if not os.path.exists(CRED_DIR):
 
 COMPOSE_GIST_NAMESPACE = "composer-"
 
+VERBOSE = False
+
 
 @app.route("/")
 def demo():
@@ -137,9 +139,12 @@ def check_image(client, service):
 
     if "build" in service:
         del service["build"]
-        click.echo("Removed build: " + service["image"])
+        if VERBOSE:
+            click.echo("Removed build: " + service["image"])
 
-    click.echo("Updated: " + service["image"] + " -> " + ref)
+    if VERBOSE:
+        click.echo("Updated: " + service["image"] + " -> " + ref)
+
     service["image"] = ref
 
 
@@ -159,10 +164,14 @@ def compile_compose_file(infile, outfile):
 
 @click.group()
 @click.version_option()
-def cli():
+@click.option(
+    "-v", "--verbose", is_flag=True, default=False, help="Enables verbose mode"
+)
+def cli(verbose):
     """
     Convert compose images references to full sha digests
     """
+    VERBOSE = verbose
 
 
 @cli.command()
@@ -191,7 +200,8 @@ def share(file, project):
     else:
         gist = gh.create_gist(COMPOSE_GIST_NAMESPACE + project, files, public=True)
 
-    click.echo(gist.html_url)
+    if VERBOSE:
+        click.echo(gist.html_url)
 
 
 def get_project_gist(gists_iter, project):
@@ -251,6 +261,7 @@ def checkout(reference):
         project = answers["selection"]
 
         project_dir = "./" + project
+
         if os.path.exists(project_dir):
             click.echo(
                 "Project directory already exists: %s"
