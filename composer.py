@@ -7,6 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+import click
 import docker
 import github3
 import yaml
@@ -102,6 +103,9 @@ def do_gh_login():
         + " to setup your GitHub credentials.\n\n\n"
     )
 
+    # This allows us to use a plain HTTP callback
+    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
+
     app.secret_key = os.urandom(24)
     app.run(debug=False, host="0.0.0.0")
 
@@ -148,48 +152,32 @@ def compile_compose_file(compose_file, outfile):
     return yaml.dump(compose)
 
 
-if __name__ == "__main__":
-    # This allows us to use a plain HTTP callback
-    os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"
-
-    parser = argparse.ArgumentParser(
-        description="""
+description = """
     Convert compose images references to full sha digests
-    """
-    )
-    parser.add_argument(
-        "--file",
-        default="./docker-compose.yml",
-        help="Compose File Input (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--outfile", default="", help="Compose File Output (default: %(default)s)",
-    )
-    parser.add_argument(
-        "--name",
-        default=os.path.basename(os.getcwd()),
-        help="Compose File Input (default: %(default)s)",
-    )
+"""
 
-    args = parser.parse_args()
 
+@click.command()
+@click.option("--file", default="./docker-compose.yml", help="Compose File")
+@click.option("--outfile", default="", help="Dab File")
+@click.option(
+    "--name", default=os.path.basename(os.getcwd()), help="Compose Project Name"
+)
+def cli(file, outfile, name):
     gh = check_gh_token(CRED_FILE)
 
     if gh is None:
         do_gh_login()
 
     # Convert references to sha's
-    files = {
-        "docker-compose.yml": {"content": compile_compose_file(args.file, args.outfile)}
-    }
+    files = {"docker-compose.yml": {"content": compile_compose_file(file, outfile)}}
 
     # run through the user's gists looking for a matching description or return None
     gist = next(
-        (item for item in gh.gists() if item.as_dict()["description"] == args.name),
-        None,
+        (item for item in gh.gists() if item.as_dict()["description"] == name), None,
     )
 
     if gist:
         gist.edit(files=files)
     else:
-        gh.create_gist(args.name, f, public=True)
+        gh.create_gist(name, f, public=True)

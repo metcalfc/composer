@@ -1,3 +1,4 @@
 dab.yml
-
+*.egg-info
+__pycache__
 .python-version
