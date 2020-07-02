@@ -15,6 +15,7 @@ import yaml
 from flask import Flask, redirect, request, session, url_for
 from flask.json import jsonify
 from halo import Halo
+from PyInquirer import prompt
 from requests_oauthlib import OAuth2Session
 
 app = Flask(__name__)
@@ -29,6 +30,8 @@ CRED_DIR = str(Path.home()) + "/.config/composer"
 CRED_FILE = CRED_DIR + "/config.yml"
 if not os.path.exists(CRED_DIR):
     os.makedirs(CRED_DIR)
+
+COMPOSE_GIST_NAMESPACE = "composer-"
 
 
 @app.route("/")
@@ -163,9 +166,9 @@ def cli():
     "--file", default="./docker-compose.yml", type=click.File("r"), help="Compose File"
 )
 @click.option(
-    "--name", default=os.path.basename(os.getcwd()), help="Compose Project Name"
+    "--project", default=os.path.basename(os.getcwd()), help="Compose Project Name"
 )
-def share(file, outfile, name):
+def share(file, project):
     """Create a new compose share"""
 
     gh = check_gh_token(CRED_FILE)
@@ -177,19 +180,86 @@ def share(file, outfile, name):
     files = {"docker-compose.yml": {"content": compile_compose_file(file, None)}}
 
     # run through the user's gists looking for a matching description or return None
-    gist = next(
-        (item for item in gh.gists() if item.as_dict()["description"] == name), None,
-    )
+    gist = get_project_gist(gh.gists(), project)
 
     if gist:
         gist.edit(files=files)
     else:
-        gh.create_gist(name, f, public=True)
+        gist = gh.create_gist(COMPOSE_GIST_NAMESPACE + project, files, public=True)
+
+    click.echo(gist.html_url)
+
+
+def get_project_gist(gists_iter, project):
+    # run through the user's gists looking for a matching description or return None
+    return next(
+        (
+            item
+            for item in gists_iter
+            if item.description == COMPOSE_GIST_NAMESPACE + project
+        ),
+        None,
+    )
 
 
 @cli.command()
-def run():
-    """ Run a shared compose project """
+@click.argument("reference")
+def checkout(reference):
+    """
+    Checkout a composer file from a REFERENCE. Reference can include user, project, and a context.
+
+    Some example REFERENCE are:
+
+    \b
+    myuser
+    myuser/myrepo
+    myuser/myrepo@mycontext
+    """
+
+    user, sep, remainder = reference.partition("/")
+    project, sep, context = remainder.partition("@")
+
+    gh = check_gh_token(CRED_FILE)
+
+    if gh is None:
+        do_gh_login()
+
+    if not context:
+        context = "default"
+
+    if not project:
+        projects = {}
+
+        # get all projects
+        for gist in gh.gists_by(user):
+            if gist.description.startswith(COMPOSE_GIST_NAMESPACE):
+                projects[gist.description.replace(COMPOSE_GIST_NAMESPACE, "")] = gist
+
+        questions = [
+            {
+                "type": "list",
+                "name": "selection",
+                "message": "Select which project to use?",
+                "choices": list(projects.keys()),
+            },
+        ]
+        answers = prompt(questions)
+        project = answers["selection"]
+
+        project_dir = "./" + project
+        if os.path.exists(project_dir):
+            click.echo(
+                "Project directory already exists: %s"
+                % click.format_filename(project_dir)
+            )
+            exit(1)
+
+        os.makedirs(project_dir)
+
+        with click.open_file(project_dir + "/docker-compose.yml", "wb") as f:
+            f.write(projects[project].files["docker-compose.yml"].content())
+
+    click.echo("cd {} && docker-compose -context {} up".format(project, context))
 
 
 @cli.command()

@@ -13,6 +13,8 @@ setup(
         "flask",
         "halo",
         "github3.py",
+        "PyInquirer",
+        "prompt_toolkit==1.0.14",
     ],
     extras_require={"dev": ["rope", "ipython"],},
     entry_points="""
