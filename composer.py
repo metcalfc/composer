@@ -125,18 +125,22 @@ def check_gh_token(file):
     return github3.login(token=data["token"])
 
 
-def check_image(client, dict):
+def check_image(client, service):
 
-    if "image" in dict:
-        spinner = Halo(text="Checking: " + dict["image"], spinner="dots")
+    if "image" in service:
+        spinner = Halo(text="Checking: " + service["image"], spinner="dots")
         spinner.start()
-        image = client.api.inspect_distribution(dict["image"])
+        image = client.api.inspect_distribution(service["image"])
         spinner.stop()
 
-        ref = dict["image"].split(":")[0] + "@" + image["Descriptor"]["digest"]
+        ref = service["image"].split(":")[0] + "@" + image["Descriptor"]["digest"]
 
-        click.echo("Updated: " + dict["image"] + " -> " + ref)
-        dict["image"] = ref
+    if "build" in service:
+        del service["build"]
+        click.echo("Removed build: " + service["image"])
+
+    click.echo("Updated: " + service["image"] + " -> " + ref)
+    service["image"] = ref
 
 
 def compile_compose_file(infile, outfile):
