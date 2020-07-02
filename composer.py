@@ -259,7 +259,7 @@ def checkout(reference):
         with click.open_file(project_dir + "/docker-compose.yml", "wb") as f:
             f.write(projects[project].files["docker-compose.yml"].content())
 
-    click.echo("cd {} && docker-compose -context {} up".format(project, context))
+    click.echo("cd {} && docker-compose --context {} up".format(project, context))
 
 
 @cli.command()
