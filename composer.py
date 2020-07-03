@@ -230,8 +230,8 @@ def checkout(reference):
     myuser/myrepo@mycontext
     """
 
-    user, sep, remainder = reference.partition("/")
-    project, sep, context = remainder.partition("@")
+    user, _, remainder = reference.partition("/")
+    project, _, context = remainder.partition("@")
 
     gh = check_gh_token(CRED_FILE)
 
