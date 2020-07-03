@@ -241,13 +241,13 @@ def checkout(reference):
     if not context:
         context = "default"
 
-    if not project:
-        projects = {}
+    projects = {}
+    # get all projects
+    for gist in gh.gists_by(user):
+        if gist.description.startswith(COMPOSE_GIST_NAMESPACE):
+            projects[gist.description.replace(COMPOSE_GIST_NAMESPACE, "")] = gist
 
-        # get all projects
-        for gist in gh.gists_by(user):
-            if gist.description.startswith(COMPOSE_GIST_NAMESPACE):
-                projects[gist.description.replace(COMPOSE_GIST_NAMESPACE, "")] = gist
+    if not project:
 
         questions = [
             {
@@ -260,19 +260,18 @@ def checkout(reference):
         answers = prompt(questions)
         project = answers["selection"]
 
-        project_dir = "./" + project
+    project_dir = "./" + project
 
-        if os.path.exists(project_dir):
-            click.echo(
-                "Project directory already exists: %s"
-                % click.format_filename(project_dir)
-            )
-            exit(1)
+    if os.path.exists(project_dir):
+        click.echo(
+            "Project directory already exists: %s" % click.format_filename(project_dir)
+        )
+        exit(1)
 
-        os.makedirs(project_dir)
+    os.makedirs(project_dir)
 
-        with click.open_file(project_dir + "/docker-compose.yml", "wb") as f:
-            f.write(projects[project].files["docker-compose.yml"].content())
+    with click.open_file(project_dir + "/docker-compose.yml", "wb") as f:
+        f.write(projects[project].files["docker-compose.yml"].content())
 
     click.echo("cd {} && docker-compose --context {} up".format(project, context))
 
